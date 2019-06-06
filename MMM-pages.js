@@ -14,7 +14,8 @@ Module.register('MMM-pages', {
     fixed: ['MMM-page-indicator'],
     animationTime: 1000,
     rotationTime: 0,
-    rotationDelay: 10000
+    rotationDelay: 10000,
+    rotationOnBoot: false
   },
 
   /**
@@ -47,10 +48,13 @@ Module.register('MMM-pages', {
       Log.warn(`[Pages]: The config option "excludes" is deprecated. Please use "fixed" instead.`);
       this.config.fixed = this.config.excludes;
     }
-
     // Disable rotation if an invalid input is given
     this.config.rotationTime = Math.max(this.config.rotationTime, 0);
     this.config.rotationDelay = Math.max(this.config.rotationDelay, 0);
+    // Rotation on Boot
+    if (this.config.rotationOnBoot == false) {
+      this.rotation = 0;
+    } else { this.rotation = this.config.rotationTime; }
   },
 
   /**
@@ -92,6 +96,17 @@ Module.register('MMM-pages', {
       case 'QUERY_PAGE_NUMBER':
         this.sendNotification('PAGE_NUMBER_IS', this.curPage);
         break;
+      case 'START_ROTATION':
+        Log.log('[Pages]: received a notification to start rotation');
+        this.rotation = this.config.rotationTime;
+        this.changePageBy(payload, 1);
+        this.updatePages();
+        break;
+      case 'STOP_ROTATION':
+        Log.log('[Pages]: received a notification to stop rotation');
+        this.rotation = 0;
+        this.clearTimers();
+        break;
       default: // Do nothing
     }
   },
@@ -122,6 +137,7 @@ Module.register('MMM-pages', {
         this.config.modules.length
       );
     }
+    Log.log('[Pages]: currently viewing page' + this.curPage);
   },
 
   /**
@@ -129,11 +145,13 @@ Module.register('MMM-pages', {
    * elements.
    */
   updatePages: function() {
-    // Update iff there's at least one page.
-    if (this.config.modules.length !== 0) {
-      this.animatePageChange();
-      this.resetTimerWithDelay(this.config.rotationDelay);
-    } else { Log.error("[Pages]: Pages aren't properly defined!"); }
+    // Update if there's at least one page.
+    if (this.rotation > 0) {
+      if (this.config.modules.length !== 0) {
+        this.animatePageChange();
+      } else { Log.error("[Pages]: Pages aren't properly defined!"); }
+        this.resetTimerWithDelay(this.config.rotationDelay);
+    } else { this.clearTimers(); }
   },
 
   /**
@@ -173,7 +191,7 @@ Module.register('MMM-pages', {
    * @param {number} delay the delay, in milliseconds.
    */
   resetTimerWithDelay: function(delay) {
-    if (this.config.rotationTime > 0) {
+    if (this.rotation > 0) {
       // This timer is the auto rotate function.
       clearInterval(this.timer);
       // This is delay timer after manually updating.
@@ -188,5 +206,9 @@ Module.register('MMM-pages', {
         }, self.config.rotationTime);
       }, delay);
     }
+  },
+  clearTimers: function() {
+      clearInterval(this.timer);
+      clearInterval(this.delayTimer);
   },
 });
